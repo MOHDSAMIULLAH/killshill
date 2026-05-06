@@ -1,9 +1,9 @@
-const { pgTable, serial, varchar, decimal, timestamp, pgEnum } = require('drizzle-orm/pg-core');
+import { pgTable, serial, varchar, decimal, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 
-const directionEnum = pgEnum('signal_direction', ['BUY', 'SELL']);
-const statusEnum = pgEnum('signal_status', ['OPEN', 'TARGET_HIT', 'STOPLOSS_HIT', 'EXPIRED']);
+export const directionEnum = pgEnum('signal_direction', ['BUY', 'SELL']);
+export const statusEnum = pgEnum('signal_status', ['OPEN', 'TARGET_HIT', 'STOPLOSS_HIT', 'EXPIRED']);
 
-const signals = pgTable('signals', {
+export const signals = pgTable('signals', {
   id:           serial('id').primaryKey(),
   symbol:       varchar('symbol', { length: 20 }).notNull(),
   direction:    directionEnum('direction').notNull(),
@@ -16,5 +16,3 @@ const signals = pgTable('signals', {
   status:       statusEnum('status').default('OPEN').notNull(),
   realized_roi: decimal('realized_roi', { precision: 10, scale: 4 }),
 });
-
-module.exports = { signals, directionEnum, statusEnum };

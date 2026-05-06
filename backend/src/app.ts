@@ -1,9 +1,9 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
 
-const signalRoutes = require('./routes/signalRoutes');
-const errorHandler = require('./middleware/errorHandler');
+import signalRoutes from './routes/signalRoutes';
+import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 
@@ -31,4 +31,4 @@ app.listen(PORT, () => {
   console.log(`KillShill backend running on http://localhost:${PORT}`);
 });
 
-module.exports = app;
+export default app;

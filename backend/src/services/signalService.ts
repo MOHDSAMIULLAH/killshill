@@ -1,26 +1,51 @@
-const signalModel = require('../models/signalModel');
-const binanceService = require('./binanceService');
+import { signalModel, Signal } from '../models/signalModel';
+import { binanceService } from './binanceService';
+import { AppError } from '../types';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface CreateSignalInput {
+  symbol?: unknown;
+  direction?: unknown;
+  entry_price?: unknown;
+  stop_loss?: unknown;
+  target_price?: unknown;
+  entry_time?: unknown;
+  expiry_time?: unknown;
+}
+
+export type EnrichedSignal = Omit<Signal, 'entry_price' | 'stop_loss' | 'target_price' | 'realized_roi'> & {
+  entry_price: number;
+  stop_loss: number;
+  target_price: number;
+  realized_roi: number | null;
+  current_price: number | null;
+  roi: string | null;
+  time_remaining: string;
+};
 
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
-function validateCreateSignal(data) {
-  const errors = [];
+function validateCreateSignal(data: CreateSignalInput): string[] {
+  const errors: string[] = [];
   const { symbol, direction, entry_price, stop_loss, target_price, entry_time, expiry_time } = data;
 
   if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
     errors.push('symbol is required');
   }
 
-  const dir = (direction || '').toUpperCase();
+  const dir = (String(direction || '')).toUpperCase();
   if (!['BUY', 'SELL'].includes(dir)) {
     errors.push('direction must be BUY or SELL');
   }
 
-  const ep = parseFloat(entry_price);
-  const sl = parseFloat(stop_loss);
-  const tp = parseFloat(target_price);
+  const ep = parseFloat(String(entry_price));
+  const sl = parseFloat(String(stop_loss));
+  const tp = parseFloat(String(target_price));
 
   if (isNaN(ep) || ep <= 0) errors.push('entry_price must be a positive number');
   if (isNaN(sl) || sl <= 0) errors.push('stop_loss must be a positive number');
@@ -39,11 +64,10 @@ function validateCreateSignal(data) {
   if (!entry_time) {
     errors.push('entry_time is required');
   } else {
-    const entryDate = new Date(entry_time);
+    const entryDate = new Date(String(entry_time));
     if (isNaN(entryDate.getTime())) {
       errors.push('entry_time must be a valid datetime');
     } else {
-      // Allow entry times up to 24 hours in the past (historical signals)
       const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
       if (entryDate < cutoff) {
         errors.push('entry_time cannot be more than 24 hours in the past');
@@ -54,11 +78,11 @@ function validateCreateSignal(data) {
   if (!expiry_time) {
     errors.push('expiry_time is required');
   } else {
-    const expiryDate = new Date(expiry_time);
+    const expiryDate = new Date(String(expiry_time));
     if (isNaN(expiryDate.getTime())) {
       errors.push('expiry_time must be a valid datetime');
     } else if (entry_time) {
-      const entryDate = new Date(entry_time);
+      const entryDate = new Date(String(entry_time));
       if (!isNaN(entryDate.getTime()) && expiryDate <= entryDate) {
         errors.push('expiry_time must be after entry_time');
       }
@@ -72,35 +96,35 @@ function validateCreateSignal(data) {
 // Business logic helpers
 // ---------------------------------------------------------------------------
 
-function calculateROI(direction, entryPrice, currentPrice) {
+function calculateROI(direction: string, entryPrice: string, currentPrice: number): number {
   const entry = parseFloat(entryPrice);
-  const current = parseFloat(currentPrice);
   if (direction === 'BUY') {
-    return ((current - entry) / entry) * 100;
+    return ((currentPrice - entry) / entry) * 100;
   }
-  return ((entry - current) / entry) * 100;
+  return ((entry - currentPrice) / entry) * 100;
 }
 
-/**
- * Check price-based status transitions (does NOT check expiry).
- */
-function evaluatePriceStatus(direction, stopLoss, targetPrice, currentPrice) {
+function evaluatePriceStatus(
+  direction: string,
+  stopLoss: string,
+  targetPrice: string,
+  currentPrice: number
+): Signal['status'] {
   const sl = parseFloat(stopLoss);
   const tp = parseFloat(targetPrice);
-  const cp = parseFloat(currentPrice);
 
   if (direction === 'BUY') {
-    if (cp >= tp) return 'TARGET_HIT';
-    if (cp <= sl) return 'STOPLOSS_HIT';
+    if (currentPrice >= tp) return 'TARGET_HIT';
+    if (currentPrice <= sl) return 'STOPLOSS_HIT';
   } else {
-    if (cp <= tp) return 'TARGET_HIT';
-    if (cp >= sl) return 'STOPLOSS_HIT';
+    if (currentPrice <= tp) return 'TARGET_HIT';
+    if (currentPrice >= sl) return 'STOPLOSS_HIT';
   }
   return 'OPEN';
 }
 
-function getTimeRemaining(expiryTime) {
-  const ms = new Date(expiryTime) - new Date();
+function getTimeRemaining(expiryTime: Date): string {
+  const ms = expiryTime.getTime() - Date.now();
   if (ms <= 0) return 'Expired';
   const totalSec = Math.floor(ms / 1000);
   const days = Math.floor(totalSec / 86400);
@@ -113,11 +137,7 @@ function getTimeRemaining(expiryTime) {
   return `${seconds}s`;
 }
 
-/**
- * Attach live-data fields (current_price, roi, time_remaining) to a signal
- * that is already in a terminal state (TARGET_HIT / STOPLOSS_HIT / EXPIRED).
- */
-function enrichResolvedSignal(signal, currentPrice) {
+function enrichResolvedSignal(signal: Signal, currentPrice: number | null): EnrichedSignal {
   return {
     ...signal,
     entry_price: parseFloat(signal.entry_price),
@@ -130,10 +150,7 @@ function enrichResolvedSignal(signal, currentPrice) {
   };
 }
 
-/**
- * Attach live-data fields to an OPEN signal (no status change).
- */
-function enrichOpenSignal(signal, currentPrice) {
+function enrichOpenSignal(signal: Signal, currentPrice: number | null): EnrichedSignal {
   const roi =
     currentPrice !== null
       ? calculateROI(signal.direction, signal.entry_price, currentPrice).toFixed(2)
@@ -150,15 +167,10 @@ function enrichOpenSignal(signal, currentPrice) {
   };
 }
 
-/**
- * Evaluate and persist status for an OPEN signal, then return the enriched record.
- * Expiry takes priority — an expired signal is never re-evaluated against price.
- */
-async function processOpenSignal(signal, currentPrice) {
+async function processOpenSignal(signal: Signal, currentPrice: number | null): Promise<EnrichedSignal> {
   const now = new Date();
   const expiry = new Date(signal.expiry_time);
 
-  // 1. Expiry check (highest priority)
   if (now >= expiry) {
     const roiValue =
       currentPrice !== null
@@ -168,7 +180,6 @@ async function processOpenSignal(signal, currentPrice) {
     return enrichResolvedSignal(updated, currentPrice);
   }
 
-  // 2. Price-based check
   if (currentPrice !== null) {
     const newStatus = evaluatePriceStatus(
       signal.direction,
@@ -192,44 +203,43 @@ async function processOpenSignal(signal, currentPrice) {
 // Service API
 // ---------------------------------------------------------------------------
 
-const signalService = {
-  async createSignal(data) {
+export const signalService = {
+  async createSignal(data: CreateSignalInput): Promise<Signal> {
     const errors = validateCreateSignal(data);
     if (errors.length > 0) {
-      const err = new Error('Validation failed');
+      const err = new Error('Validation failed') as AppError;
       err.statusCode = 400;
       err.errors = errors;
       throw err;
     }
 
     const normalized = {
-      symbol: data.symbol.trim().toUpperCase(),
-      direction: data.direction.toUpperCase(),
-      entry_price: parseFloat(data.entry_price),
-      stop_loss: parseFloat(data.stop_loss),
-      target_price: parseFloat(data.target_price),
-      entry_time: new Date(data.entry_time).toISOString(),
-      expiry_time: new Date(data.expiry_time).toISOString(),
+      symbol: String(data.symbol).trim().toUpperCase(),
+      direction: String(data.direction).toUpperCase() as 'BUY' | 'SELL',
+      entry_price: String(parseFloat(String(data.entry_price))),
+      stop_loss: String(parseFloat(String(data.stop_loss))),
+      target_price: String(parseFloat(String(data.target_price))),
+      entry_time: new Date(String(data.entry_time)),
+      expiry_time: new Date(String(data.expiry_time)),
     };
 
     return signalModel.create(normalized);
   },
 
-  async getAllSignals() {
-    const signals = await signalModel.findAll();
-    if (signals.length === 0) return [];
+  async getAllSignals(): Promise<EnrichedSignal[]> {
+    const allSignals = await signalModel.findAll();
+    if (allSignals.length === 0) return [];
 
-    // Batch-fetch live prices for all unique symbols
-    const uniqueSymbols = [...new Set(signals.map((s) => s.symbol))];
-    let priceMap = {};
+    const uniqueSymbols = [...new Set(allSignals.map((s) => s.symbol))];
+    let priceMap: Record<string, number> = {};
     try {
       priceMap = await binanceService.getPrices(uniqueSymbols);
-    } catch (err) {
-      console.error('Binance batch price fetch failed:', err.message);
+    } catch (err: unknown) {
+      console.error('Binance batch price fetch failed:', (err as Error).message);
     }
 
     return Promise.all(
-      signals.map((signal) => {
+      allSignals.map((signal) => {
         const currentPrice = priceMap[signal.symbol] ?? null;
         if (signal.status === 'OPEN') {
           return processOpenSignal(signal, currentPrice);
@@ -239,19 +249,19 @@ const signalService = {
     );
   },
 
-  async getSignalById(id) {
+  async getSignalById(id: number): Promise<EnrichedSignal> {
     const signal = await signalModel.findById(id);
     if (!signal) {
-      const err = new Error(`Signal ${id} not found`);
+      const err = new Error(`Signal ${id} not found`) as AppError;
       err.statusCode = 404;
       throw err;
     }
 
-    let currentPrice = null;
+    let currentPrice: number | null = null;
     try {
       currentPrice = await binanceService.getPrice(signal.symbol);
-    } catch (err) {
-      console.error('Binance price fetch failed:', err.message);
+    } catch (err: unknown) {
+      console.error('Binance price fetch failed:', (err as Error).message);
     }
 
     if (signal.status === 'OPEN') {
@@ -260,7 +270,7 @@ const signalService = {
     return enrichResolvedSignal(signal, currentPrice);
   },
 
-  async getSignalStatus(id) {
+  async getSignalStatus(id: number) {
     const signal = await this.getSignalById(id);
     return {
       id: signal.id,
@@ -273,15 +283,13 @@ const signalService = {
     };
   },
 
-  async deleteSignal(id) {
+  async deleteSignal(id: number): Promise<Signal> {
     const deleted = await signalModel.remove(id);
     if (!deleted) {
-      const err = new Error(`Signal ${id} not found`);
+      const err = new Error(`Signal ${id} not found`) as AppError;
       err.statusCode = 404;
       throw err;
     }
     return deleted;
   },
 };
-
-module.exports = signalService;

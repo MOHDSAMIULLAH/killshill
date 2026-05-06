@@ -2,23 +2,32 @@
   "name": "killshill-backend",
   "version": "1.0.0",
   "description": "Trading signal tracker backend",
-  "main": "src/app.js",
+  "main": "dist/app.js",
   "scripts": {
-    "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
-    "migrate": "drizzle-kit push",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "dev": "tsx watch src/app.ts",
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx src/db/migrate.ts",
     "studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "axios": "^1.6.8",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "drizzle-orm": "^0.41.0",
-    "express": "^4.19.2",
-    "pg": "^8.11.5"
+    "@neondatabase/serverless": "^1.1.0",
+    "axios": "^1.16.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "express": "^5.2.1"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.30.0",
-    "nodemon": "^3.1.0"
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "drizzle-kit": "^0.31.10",
+    "nodemon": "^3.1.14",
+    "pg": "^8.20.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "ws": "^8.20.0"
   }
 }

@@ -1,0 +1,127 @@
+{
+  "info": {
+    "name": "KillShill Backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "signalId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Signals",
+      "item": [
+        {
+          "name": "Create Signal (BUY)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"symbol\": \"BTCUSDT\",\n  \"direction\": \"BUY\",\n  \"entry_price\": 60000,\n  \"stop_loss\": 58000,\n  \"target_price\": 65000,\n  \"entry_time\": \"{{$isoTimestamp}}\",\n  \"expiry_time\": \"2026-05-14T00:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/signals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "signals"]
+            }
+          }
+        },
+        {
+          "name": "Create Signal (SELL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"symbol\": \"ETHUSDT\",\n  \"direction\": \"SELL\",\n  \"entry_price\": 3000,\n  \"stop_loss\": 3200,\n  \"target_price\": 2700,\n  \"entry_time\": \"{{$isoTimestamp}}\",\n  \"expiry_time\": \"2026-05-14T00:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/signals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "signals"]
+            }
+          }
+        },
+        {
+          "name": "Get All Signals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/signals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "signals"]
+            }
+          }
+        },
+        {
+          "name": "Get Signal by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/signals/{{signalId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "signals", "{{signalId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Signal Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/signals/{{signalId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "signals", "{{signalId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "Delete Signal",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/signals/{{signalId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "signals", "{{signalId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
